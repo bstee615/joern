@@ -33,6 +33,7 @@ trait AstForExpressionsCreator {
     val callNode =
       createStaticCallNode(callExpr.code, methodName, methodFullName, callee.lineNumber, callee.columnNumber)
     val args = astForNodes(callExpr.json("arguments").arr.toList)
+    setIndices(args)
     callAst(callNode, args)
   }
 
@@ -55,7 +56,9 @@ trait AstForExpressionsCreator {
     val code     = s"$baseCode$propertyCode$argsCode"
 
     val callNode = createCallNode(code, "", DispatchTypes.DYNAMIC_DISPATCH, callExpr.lineNumber, callExpr.columnNumber)
-    callAst(callNode, Ast(baseNode) +: args, Some(Ast(receiverNode)))
+    val argAsts  = Ast(baseNode) +: args
+    setIndices(argAsts, skipThisArg = true)
+    callAst(callNode, argAsts, Some(Ast(receiverNode)))
   }
 
   protected def astForCallExpression(callExpr: BabelNodeInfo): Ast = {
@@ -72,7 +75,7 @@ trait AstForExpressionsCreator {
             case BabelAst.Identifier =>
               val receiverAst = astForNodeWithFunctionReference(callee.json)
               Ast.storeInDiffGraph(receiverAst, diffGraph)
-              val baseNode = createIdentifierNode(base.code, base).order(1).argumentIndex(1)
+              val baseNode = createIdentifierNode(base.code, base)
               scope.addVariableReference(base.code, baseNode)
               (receiverAst, None, receiverAst, baseNode)
             case _ =>
@@ -223,7 +226,9 @@ trait AstForExpressionsCreator {
             assignment.lineNumber,
             assignment.columnNumber
           )
-        callAst(callNode, List(lhsAst, rhsAst))
+        val callArgs = List(lhsAst, rhsAst)
+        setIndices(callArgs)
+        callAst(callNode, callArgs)
     }
   }
 
@@ -279,7 +284,9 @@ trait AstForExpressionsCreator {
 
     val callNode =
       createCallNode(binExpr.code, op, DispatchTypes.STATIC_DISPATCH, binExpr.lineNumber, binExpr.columnNumber)
-    callAst(callNode, List(lhsAst, rhsAst))
+    val callArgs = List(lhsAst, rhsAst)
+    setIndices(callArgs)
+    callAst(callNode, callArgs)
   }
 
   protected def astForUpdateExpression(updateExpr: BabelNodeInfo): Ast = {
@@ -298,7 +305,9 @@ trait AstForExpressionsCreator {
 
     val callNode =
       createCallNode(updateExpr.code, op, DispatchTypes.STATIC_DISPATCH, updateExpr.lineNumber, updateExpr.columnNumber)
-    callAst(callNode, List(argumentAst))
+    val callArgs = List(argumentAst)
+    setIndices(callArgs)
+    callAst(callNode, callArgs)
   }
 
   protected def astForUnaryExpression(unaryExpr: BabelNodeInfo): Ast = {
@@ -320,7 +329,9 @@ trait AstForExpressionsCreator {
 
     val callNode =
       createCallNode(unaryExpr.code, op, DispatchTypes.STATIC_DISPATCH, unaryExpr.lineNumber, unaryExpr.columnNumber)
-    callAst(callNode, List(argumentAst))
+    val callArgs = List(argumentAst)
+    setIndices(callArgs)
+    callAst(callNode, callArgs)
   }
 
   protected def astForSequenceExpression(seq: BabelNodeInfo): Ast = {
@@ -342,8 +353,9 @@ trait AstForExpressionsCreator {
       awaitExpr.lineNumber,
       awaitExpr.columnNumber
     )
-    val argAst = astForNode(awaitExpr.json("argument"))
-    callAst(callNode, List(argAst))
+    val callArgs = List(astForNode(awaitExpr.json("argument")))
+    setIndices(callArgs)
+    callAst(callNode, callArgs)
   }
 
   protected def astForArrayExpression(arrExpr: BabelNodeInfo): Ast = {
@@ -382,11 +394,8 @@ trait AstForExpressionsCreator {
       val assignmentCode = s"${localTmpNode.code} = ${arrayCallNode.code}"
       val assignmentTmpArrayCallNode =
         createAssignmentCallAst(tmpArrayNode, arrayCallNode, assignmentCode, lineNumber, columnNumber)
-      Ast.storeInDiffGraph(assignmentTmpArrayCallNode, diffGraph)
-      diffGraph.addEdge(blockNode, assignmentTmpArrayCallNode.nodes.head, EdgeTypes.AST)
 
-      var index = 1
-      elements.foreach {
+      val elementAsts = elements.flatMap {
         case element if !element.isNull =>
           val elementNodeInfo     = createBabelNodeInfo(element)
           val elementLineNumber   = elementNodeInfo.lineNumber
@@ -394,34 +403,33 @@ trait AstForExpressionsCreator {
           val elementCode         = elementNodeInfo.code
           val elementNode         = astForNode(element)
 
-          val pushCallNode =
-            createCallNode(
-              tmpName + s".push($elementCode)",
-              "",
-              DispatchTypes.DYNAMIC_DISPATCH,
-              elementLineNumber,
-              elementColumnNumber
-            ).argumentIndex(index)
+          val pushCallNode = createCallNode(
+            tmpName + s".push($elementCode)",
+            "",
+            DispatchTypes.DYNAMIC_DISPATCH,
+            elementLineNumber,
+            elementColumnNumber
+          )
 
           val baseNode     = createIdentifierNode(tmpName, elementNodeInfo)
           val memberNode   = createFieldIdentifierNode("push", elementLineNumber, elementColumnNumber)
           val receiverNode = createFieldAccessCallAst(baseNode, memberNode, elementLineNumber, elementColumnNumber)
           val thisPushNode = createIdentifierNode(tmpName, elementNodeInfo)
 
-          val callNode = callAst(pushCallNode, List(Ast(thisPushNode), elementNode), Some(receiverNode))
-          Ast.storeInDiffGraph(callNode, diffGraph)
-          diffGraph.addEdge(blockNode, pushCallNode, EdgeTypes.AST)
-          index = index + 1
-        case _ => // skip
+          val callArgs = List(Ast(thisPushNode), elementNode)
+          setIndices(callArgs, skipThisArg = true)
+          Some(callAst(pushCallNode, callArgs, Some(receiverNode)))
+        case _ => None // skip
       }
 
       val tmpArrayReturnNode = createIdentifierNode(tmpName, arrExpr)
-      diffGraph.addEdge(blockNode, tmpArrayReturnNode, EdgeTypes.AST)
 
       scope.popScope()
       localAstParentStack.pop()
 
-      Ast(blockNode)
+      val blockChildrenAsts = List(assignmentTmpArrayCallNode) ++ elementAsts :+ Ast(tmpArrayReturnNode)
+      setIndices(blockChildrenAsts)
+      Ast(blockNode).withChildren(blockChildrenAsts)
     }
   }
 
@@ -437,7 +445,9 @@ trait AstForExpressionsCreator {
         templateExpr.lineNumber,
         templateExpr.columnNumber
       )
-    callAst(templateExprCall, List(argumentAst))
+    val callArgs = List(argumentAst)
+    setIndices(callArgs)
+    callAst(templateExprCall, callArgs)
   }
 
   protected def astForObjectExpression(objExpr: BabelNodeInfo): Ast = {

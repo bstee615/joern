@@ -46,9 +46,9 @@ trait AstForFunctionsCreator {
               assignmentPattern.lineNumber,
               assignmentPattern.columnNumber
             )
-            additionalBlockStatements.addOne(
-              astForDeconstruction(objPattern, astForNodeWithFunctionReference(rhsElement), Some(name))
-            )
+            val rhsAst = astForNodeWithFunctionReference(rhsElement)
+            Ast.storeInDiffGraph(rhsAst, diffGraph)
+            additionalBlockStatements.addOne(astForDeconstruction(objPattern, rhsAst, Some(name)))
             param
           case arrPattern @ BabelNodeInfo(BabelAst.ArrayPattern) =>
             val name = generateUnusedVariableName(usedVariableNames, Set.empty, s"param$index")
@@ -60,9 +60,9 @@ trait AstForFunctionsCreator {
               assignmentPattern.lineNumber,
               assignmentPattern.columnNumber
             )
-            additionalBlockStatements.addOne(
-              astForDeconstruction(arrPattern, astForNodeWithFunctionReference(rhsElement), Some(name))
-            )
+            val rhsAst = astForNodeWithFunctionReference(rhsElement)
+            Ast.storeInDiffGraph(rhsAst, diffGraph)
+            additionalBlockStatements.addOne(astForDeconstruction(arrPattern, rhsAst, Some(name)))
             param
           case other =>
             additionalBlockStatements.addOne(convertParamWithDefault(assignmentPattern))

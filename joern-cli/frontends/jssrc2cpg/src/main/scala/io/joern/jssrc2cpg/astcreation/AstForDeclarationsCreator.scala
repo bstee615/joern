@@ -294,12 +294,12 @@ trait AstForDeclarationsCreator {
     }
     Ast.storeInDiffGraph(testAst, diffGraph)
 
-    val falseAst = {
+    val falseNode = {
       val initNode = createIdentifierNode(keyName, pattern)
       scope.addVariableReference(keyName, initNode)
       initNode
     }
-    createTernaryCallAst(testAst.nodes.head, sourceAst.nodes.head, falseAst, pattern.lineNumber, pattern.columnNumber)
+    createTernaryCallAst(testAst.nodes.head, sourceAst.nodes.head, falseNode, pattern.lineNumber, pattern.columnNumber)
   }
 
   protected def astForDeconstruction(pattern: BabelNodeInfo, sourceAst: Ast, paramName: Option[String] = None): Ast = {
@@ -315,6 +315,7 @@ trait AstForDeclarationsCreator {
     val tmpNode = createIdentifierNode(localTmpName, pattern)
 
     val rhsAssignmentAst = paramName.map(createParamAst(pattern, _, sourceAst)).getOrElse(sourceAst)
+    Ast.storeInDiffGraph(rhsAssignmentAst, diffGraph)
     val assignmentTmpCallAst =
       createAssignmentCallAst(
         tmpNode,
@@ -325,8 +326,6 @@ trait AstForDeclarationsCreator {
       )
 
     val subTreeAsts = pattern match {
-      case ident @ BabelNodeInfo(BabelAst.Identifier) =>
-        List(convertDestructingObjectElement(ident, ident.code, localTmpName))
       case BabelNodeInfo(BabelAst.ObjectPattern) =>
         pattern.json("properties").arr.toList.map { element =>
           createBabelNodeInfo(element) match {
@@ -353,6 +352,8 @@ trait AstForDeclarationsCreator {
             }
           case _ => Ast()
         }
+      case other =>
+        List(convertDestructingObjectElement(other, other.code, localTmpName))
     }
 
     val returnTmpNode = createIdentifierNode(localTmpName, pattern)

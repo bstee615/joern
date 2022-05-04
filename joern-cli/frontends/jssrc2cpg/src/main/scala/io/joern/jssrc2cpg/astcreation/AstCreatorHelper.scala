@@ -143,11 +143,11 @@ trait AstCreatorHelper {
     (positionToLineNumber, positionToFirstPositionInLine)
   }
 
-  protected def setIndices(arguments: List[Ast]): Unit = {
+  protected def setIndices(arguments: List[Ast], skipThisArg: Boolean = false): Unit = {
     withIndex(arguments) { case (a, i) =>
       a.root.collect { case x: ExpressionNew =>
         x.argumentIndex = i
-        x.order = i
+        x.order = if (skipThisArg) i + 1 else i
       }
     }
   }

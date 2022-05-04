@@ -148,6 +148,7 @@ class AstCreator(val config: Config, val parserResult: ParseResult, val global: 
     case doWhileStmt @ BabelNodeInfo(BabelAst.DoWhileStatement)          => astForDoWhileStatement(doWhileStmt)
     case switchStmt @ BabelNodeInfo(BabelAst.SwitchStatement)            => astForSwitchStatement(switchStmt)
     case breakStmt @ BabelNodeInfo(BabelAst.BreakStatement)              => astForBreakStatement(breakStmt)
+    case continueStmt @ BabelNodeInfo(BabelAst.ContinueStatement)        => astForContinueStatement(continueStmt)
     case throwStmt @ BabelNodeInfo(BabelAst.ThrowStatement)              => astForThrowStatement(throwStmt)
     case forInStmt @ BabelNodeInfo(BabelAst.ForInStatement)              => astForInOfStatement(forInStmt)
     case forOfStmt @ BabelNodeInfo(BabelAst.ForOfStatement)              => astForInOfStatement(forOfStmt)

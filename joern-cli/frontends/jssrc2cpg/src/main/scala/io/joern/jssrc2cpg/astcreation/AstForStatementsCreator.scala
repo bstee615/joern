@@ -18,12 +18,14 @@ trait AstForStatementsCreator {
 
   protected def createBlockStatementAsts(json: Value): List[Ast] = {
     val blockStmts = json.arr.map(createBabelNodeInfo).sortBy(_.node != BabelAst.FunctionDeclaration).toList
-    blockStmts.map {
+    val blockAsts = blockStmts.map {
       case func @ BabelNodeInfo(BabelAst.FunctionDeclaration) =>
         astForFunctionDeclaration(func, shouldCreateAssignmentCall = true, shouldCreateFunctionReference = true)
       case other =>
         astForNode(other.json)
     }
+    setIndices(blockAsts)
+    blockAsts
   }
 
   protected def astForBlockStatement(block: BabelNodeInfo): Ast = {
@@ -131,6 +133,9 @@ trait AstForStatementsCreator {
   protected def astForBreakStatement(breakStmt: BabelNodeInfo): Ast =
     Ast(createControlStructureNode(breakStmt, ControlStructureTypes.BREAK))
 
+  protected def astForContinueStatement(continueStmt: BabelNodeInfo): Ast =
+    Ast(createControlStructureNode(continueStmt, ControlStructureTypes.CONTINUE))
+
   protected def astForThrowStatement(throwStmt: BabelNodeInfo): Ast = {
     val argumentAst = astForNode(throwStmt.json("argument"))
     val throwCallNode =
@@ -141,7 +146,9 @@ trait AstForStatementsCreator {
         throwStmt.lineNumber,
         throwStmt.columnNumber
       )
-    callAst(throwCallNode, List(argumentAst))
+    val callArgs = List(argumentAst)
+    setIndices(callArgs)
+    callAst(throwCallNode, callArgs)
   }
 
   private def astsForSwitchCase(switchCase: BabelNodeInfo): List[Ast] = {
@@ -224,8 +231,9 @@ trait AstForStatementsCreator {
       forInOfStmt.columnNumber
     )
 
-    val argAst            = astForNode(collection)
-    val objectKeysCallAst = callAst(objectKeysCallNode, List(argAst))
+    val objectKeysCallArgs = List(astForNode(collection))
+    setIndices(objectKeysCallArgs)
+    val objectKeysCallAst = callAst(objectKeysCallNode, objectKeysCallArgs)
 
     val indexBaseNode = createIdentifierNode("Symbol", forInOfStmt)
 
@@ -234,9 +242,13 @@ trait AstForStatementsCreator {
     val indexAccessNode =
       createFieldAccessCallAst(indexBaseNode, indexMemberNode, forInOfStmt.lineNumber, forInOfStmt.columnNumber)
 
-    val indexCallAst = callAst(indexCallNode, List(objectKeysCallAst, indexAccessNode))
+    val indexCallArgs = List(objectKeysCallAst, indexAccessNode)
+    setIndices(indexCallArgs)
+    val indexCallAst = callAst(indexCallNode, indexCallArgs)
 
-    val callNodeAst = callAst(callNode, List(Ast(thisNode)), Some(indexCallAst))
+    val callNodeArgs = List(Ast(thisNode))
+    setIndices(callNodeArgs)
+    val callNodeAst = callAst(callNode, callNodeArgs, Some(indexCallAst))
 
     val iteratorAssignmentNode =
       createCallNode(
@@ -247,7 +259,9 @@ trait AstForStatementsCreator {
         forInOfStmt.columnNumber
       )
 
-    val iteratorAssignmentAst = callAst(iteratorAssignmentNode, List(Ast(iteratorNode), callNodeAst))
+    val iteratorAssignmentArgs = List(Ast(iteratorNode), callNodeAst)
+    setIndices(iteratorAssignmentArgs)
+    val iteratorAssignmentAst = callAst(iteratorAssignmentNode, iteratorAssignmentArgs)
 
     // _result:
     val resultName      = generateUnusedVariableName(usedVariableNames, Set.empty, "_result")
@@ -305,9 +319,13 @@ trait AstForStatementsCreator {
 
     val thisNextNode = createIdentifierNode(iteratorName, forInOfStmt)
 
-    val rhsAst = callAst(rhsNode, List(Ast(thisNextNode)), Some(nextReceiverNode))
+    val rhsArgs = List(Ast(thisNextNode))
+    setIndices(rhsArgs)
+    val rhsAst = callAst(rhsNode, rhsArgs, Some(nextReceiverNode))
 
-    val doneBaseAst = callAst(doneBaseNode, List(Ast(lhsNode), rhsAst))
+    val doneBaseArgs = List(Ast(lhsNode), rhsAst)
+    setIndices(doneBaseArgs)
+    val doneBaseAst = callAst(doneBaseNode, doneBaseArgs)
     Ast.storeInDiffGraph(doneBaseAst, diffGraph)
 
     val doneMemberNode = createFieldIdentifierNode("done", forInOfStmt.lineNumber, forInOfStmt.columnNumber)
@@ -315,7 +333,9 @@ trait AstForStatementsCreator {
     val testNode =
       createFieldAccessCallAst(doneBaseNode, doneMemberNode, forInOfStmt.lineNumber, forInOfStmt.columnNumber)
 
-    val testCallAst = callAst(testCallNode, List(testNode))
+    val testCallArgs = List(testNode)
+    setIndices(testCallArgs)
+    val testCallAst = callAst(testCallNode, testCallArgs)
 
     val whileLoopAst = Ast(whileLoopNode).withChild(testCallAst).withConditionEdge(whileLoopNode, testCallNode)
 
@@ -336,7 +356,9 @@ trait AstForStatementsCreator {
       forInOfStmt.columnNumber
     )
 
-    val loopVariableAssignmentAst = callAst(loopVariableAssignmentNode, List(Ast(whileLoopVariableNode), accessAst))
+    val loopVariableAssignmentArgs = List(Ast(whileLoopVariableNode), accessAst)
+    setIndices(loopVariableAssignmentArgs)
+    val loopVariableAssignmentAst = callAst(loopVariableAssignmentNode, loopVariableAssignmentArgs)
 
     val whileLoopBlockNode = createBlockNode(forInOfStmt.code, forInOfStmt.lineNumber, forInOfStmt.columnNumber)
     scope.pushNewBlockScope(whileLoopBlockNode)
