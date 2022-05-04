@@ -76,6 +76,25 @@ trait AstNodeBuilder {
       .columnNumber(column)
   }
 
+  protected def setIndices(asts: List[Ast], skipThisArg: Boolean = false): Unit = {
+    withIndex(asts) { case (a, i) =>
+      a.root.collect { case x: ExpressionNew =>
+        x.argumentIndex = i
+        x.order = if (skipThisArg) i + 1 else i
+      }
+    }
+  }
+
+  protected def createCallAst(
+    callNode: NewCall,
+    arguments: List[Ast],
+    skipThisArg: Boolean = false,
+    receiver: Option[Ast] = None
+  ): Ast = {
+    setIndices(arguments, skipThisArg)
+    callAst(callNode, arguments, receiver)
+  }
+
   protected def createReturnAst(returnNode: NewReturn, arguments: List[Ast] = List()): Ast = {
     setIndices(arguments)
     Ast(returnNode)
@@ -197,8 +216,7 @@ trait AstNodeBuilder {
       column
     )
     val arguments = List(Ast(baseNode), Ast(partNode))
-    setIndices(arguments)
-    callAst(callNode, arguments)
+    createCallAst(callNode, arguments)
   }
 
   protected def createFieldAccessCallAst(
@@ -215,8 +233,7 @@ trait AstNodeBuilder {
       column
     )
     val arguments = List(Ast(baseNode), Ast(partNode))
-    setIndices(arguments)
-    callAst(callNode, arguments)
+    createCallAst(callNode, arguments)
   }
 
   protected def createTernaryCallAst(
@@ -229,8 +246,7 @@ trait AstNodeBuilder {
     val code      = codeOf(testNode) + " ? " + codeOf(trueNode) + " : " + codeOf(falseNode)
     val callNode  = createCallNode(code, Operators.conditional, DispatchTypes.STATIC_DISPATCH, line, column)
     val arguments = List(Ast(testNode), Ast(trueNode), Ast(falseNode))
-    setIndices(arguments)
-    callAst(callNode, arguments)
+    createCallAst(callNode, arguments)
   }
 
   protected def createCallNode(
@@ -280,8 +296,7 @@ trait AstNodeBuilder {
     val code      = codeOf(destId) + " === " + codeOf(sourceId)
     val callNode  = createCallNode(code, Operators.equals, DispatchTypes.STATIC_DISPATCH, line, column)
     val arguments = List(Ast(destId), Ast(sourceId))
-    setIndices(arguments)
-    callAst(callNode, arguments)
+    createCallAst(callNode, arguments)
   }
 
   protected def createAssignmentCallAst(
@@ -293,8 +308,7 @@ trait AstNodeBuilder {
   ): Ast = {
     val callNode  = createCallNode(code, Operators.assignment, DispatchTypes.STATIC_DISPATCH, line, column)
     val arguments = List(Ast(destId), Ast(sourceId))
-    setIndices(arguments)
-    callAst(callNode, arguments)
+    createCallAst(callNode, arguments)
   }
 
   protected def createIdentifierNode(name: String, node: BabelNodeInfo): NewIdentifier = {

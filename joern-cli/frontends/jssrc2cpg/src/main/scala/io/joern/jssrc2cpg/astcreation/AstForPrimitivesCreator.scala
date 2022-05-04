@@ -131,8 +131,7 @@ trait AstForPrimitivesCreator {
     val argumentAsts = expressions.zip(quasis).flatMap { case (expression, quasi) =>
       List(astForNode(quasi), astForNode(expression))
     }
-    val callArgs = argumentAsts :+ astForNode(quasisTail)
-    setIndices(callArgs)
-    callAst(templateCall, callArgs)
+    val argAsts = argumentAsts :+ astForNode(quasisTail)
+    createCallAst(templateCall, argAsts)
   }
 }
