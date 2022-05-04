@@ -29,13 +29,38 @@ class ValidationTests extends AnyFreeSpec with Matchers {
         |}
         |""".stripMargin)
 
-    "should contain TYPE nodes for `kotlin.Function0` and `kotlin.Function1`" in {
+    "should contain TYPE nodes for `kotlin.Function0`, `kotlin.Function1` and `kotlin.Pair`" in {
       cpg.typ.fullNameExact("kotlin.Function0").size should not be 0
       cpg.typ.fullNameExact("kotlin.Function1").size should not be 0
+      cpg.typ.fullNameExact("kotlin.Pair").size should not be 0
     }
 
     "should contain CLOSURE_BINDING nodes for the lambdas" in {
       cpg.all.collectAll[ClosureBinding].size should not be 0
+    }
+  }
+
+  "CPG for code with usage of `Gson` external library" - {
+    lazy val cpg = TestContext.buildCpg(
+      """
+        |package mypkg
+        |
+        |import com.google.gson.Gson
+        |
+        |fun main() {
+        |   val l = ArrayList<String>()
+        |   l.add("ONE")
+        |   l.add("TWO")
+        |   val j = Gson().toJson(l)
+        |   println("json: " + j)
+        |}
+        |""".stripMargin,
+      withTestResourceClassPath = false
+    )
+
+    "should contain CALL node for the ctor-call with a METHOD_FULL_NAME starting with the package name" in {
+      val List(c) = cpg.call.codeExact("Gson()").l
+      c.methodFullName.startsWith("com.google.gson.Gson") shouldBe true
     }
   }
 
